@@ -1,0 +1,1803 @@
+---
+title: "M&E report of the Post-AIMS survey of 2019"
+author: " "
+date: "19 July 2019"
+output: word_document
+---
+
+```{r setup, include=FALSE, out.width='.49\\linewidth', fig.width=10, fig.height=3,fig.show='hold',fig.align='center'}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+library("ggplot2")
+library("dplyr")
+library("reshape2")
+library("tidyr")
+library("stringr")
+library("scales")
+library("gridExtra")
+library("flextable")
+library("officer")
+```
+
+
+## Methadology 
+
+All p-values greater that 0.05 (or 0.1 depending) indicate that the considered variables are independent i.e none has an effect on the other. This is a common trend for comparisons involving gender but a number dependencies manifest when comparing survey inquiries versus centres.
+
+## Recommendations
+1. The broad sectors of research at AIMS should be revised e.g climate Change was missing and could only be listed among "Others".
+2. More consistency in responses is needed between Pre and Post - AIMS surveys in order to render such data to appropriate statistical tests about the effect of  AIMS
+
+#### Number of responses across the years and centers
+```{r include=FALSE}
+# to generate the centre frequency tables for inquries of the kind: one question - multiple responses 
+centreTableMaker <- function(qn,myData){
+  mytable <- table(pull(myData, qn),
+                   myData$`Which AIMS center are you attending or did you attend?`)
+  df <- as.data.frame(mytable)
+  df2 <- df%>% filter(!is.na(Var1)) %>% 
+  group_by(Var1) %>% mutate("OptionByCentre(%)" = round((Freq/sum(Freq))*100))%>% arrange(Var1)
+  df3 <- df2 %>% group_by(Var1) %>% mutate("Option(%)" = round((sum(Freq)/sum(df2$Freq))*100)) %>%
+  group_by(Var2) %>% mutate("Centre(%)" = round((Freq/sum(Freq))*100)) %>% rename(Option = Var1, Gender = Var2) %>%
+  select(-starts_with("AIMS")) %>% mutate_if(is.numeric,as.integer)
+  return(df3)
+}
+
+# to generate the gender frequency tables for inquries of the kind: one question - multiple responses 
+genderTableMaker <- function(qn,myData){
+  mytable <- table(pull(myData, qn),
+                   myData$`What is your gender`)
+  df <- as.data.frame(mytable)
+  df2 <- df%>% filter(!is.na(Var1)) %>% 
+  group_by(Var1) %>% mutate("OptionByGender(%)" = round((Freq/sum(Freq))*100))%>% arrange(Var1)
+  df3 <- df2 %>% group_by(Var1) %>% mutate("Option(%)" = round((sum(Freq)/sum(df2$Freq))*100)) %>%
+  group_by(Var2) %>% mutate("Gender(%)" = round((Freq/sum(Freq))*100)) %>% rename(Option = Var1, Gender = Var2) %>%
+  select(-starts_with("AIMS")) %>% mutate_if(is.numeric,as.integer)
+  return(df3)
+}
+
+# to calculate variable independence by chisquare test 
+testFunc<- function(freqTbl){
+  testdf <- spread(freqTbl[,1:3],colnames(freqTbl)[2], Freq)[,-1]
+  return(chisq.test(testdf, simulate.p.value = TRUE)$p.value)
+}
+
+# to generate a pie chart for inquries of the kind: one question - multiple responses 
+pieChartPlotter <- function(Dataset, legend.title){
+  ggplot(Dataset, aes(x="", y=propn, fill=Grade)) + 
+    geom_bar(stat="identity", width=1, color = "white")+
+    # Convert to pie (polar coordinates) and add labels
+    coord_polar("y", direction = -1,start=0) + 
+    geom_text(aes(x = rep(1.6,dim(Dataset)[1]), 
+                  label = paste0(round(propn*100), "%")), 
+              position = position_stack(vjust = 0.5), size = 3.5)+
+    # Add color scale (hex colors)
+    scale_fill_manual(values=c("red", "maroon", "orange","#33658A", "#2F4858", 
+                               "yellow", "#F26419", "#999999", "#55DDE0", "pink")) +
+    # Remove labels and add title
+    labs(x = NULL, y = NULL, fill = NULL)+
+    # Tidy up the theme
+    theme_classic() + theme(axis.line = element_blank(),
+                            axis.text = element_blank(),
+                            axis.ticks = element_blank(),
+                            plot.title = element_text(hjust = 0.5, color = "#666666"))+
+    labs(fill = legend.title)
+}
+
+# to generate a stacked chart for inquries of the kind: multiple questions - multiple responses 
+stackedChartPlotter <- function(Dataset){
+  ggplot(Dataset, aes(x=skills, y= percent, fill=selfEvaluation)) +
+    geom_bar(stat="identity", width = .45, colour="black", lwd=0.1) +
+    geom_text(aes(label=ifelse(percent >= 0.07, paste0(sprintf("%.0f", percent*100),"%"),"")),
+              position=position_stack(vjust=0.5), colour="white") +
+    scale_fill_manual(NULL,values=rev(c("#33658A", "#55DDE0", "#2F4858","orange", "maroon", "red")),guide = guide_legend(reverse = TRUE)) +
+    coord_flip() +
+    scale_y_continuous(labels = percent_format()) +
+    labs(y="", x="")+ theme(panel.background = element_blank(),legend.position = "bottom", 
+                            legend.direction = "horizontal")
+}
+
+responseData <- readxl::read_xlsx("/home/buri/NEI work/Post AIMS 2018-2019.xlsx")
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+responsePerCentre <- responseData %>% 
+  rename(Centre = `Which AIMS center are you attending or did you attend?`) %>% 
+  group_by(`Centre`) %>% 
+  count() %>% rename('2018' = n)
+previousResponses <- readxl::read_xlsx("/home/buri/NEI work/numberParticipants2012-2017.xlsx")
+updatedResponses <- left_join(previousResponses,responsePerCentre, by = "Centre")
+updatedResponses$`2018`[is.na(updatedResponses$`2018`)] <- 0
+
+totals <- updatedResponses %>% mutate('Sum' = apply(.,1, function(x) sum(as.numeric(x[-1]))))%>% mutate_if(is.numeric,as.integer)
+ft <- autofit(flextable(totals))
+fit_to_width(ft, max_width = 8)
+
+```
+
+### Overview of respondents to the Exit survey of 2019
+#### Overview by gender and age
+
+```{r echo=FALSE}
+currentDate <- "2019/07/19"
+# selecting and tallying the Gender information
+genderCounts <- responseData %>% select(`What is your gender`) %>% 
+  rename(Gender = `What is your gender`) %>% 
+  group_by(Gender) %>% summarise(n = n()) %>% 
+  mutate(prop = n*100/sum(n))%>% mutate_if(is.numeric,as.integer)
+# Add label position
+genderCounts <- genderCounts %>%
+  arrange(desc(Gender)) %>%
+  mutate(lab.ypos = cumsum(prop) - 0.5*prop)%>% mutate_if(is.numeric,as.integer)
+# colors to use
+mycols <- c("red", "orange")
+# plotting a donut plot of the summarised data
+p1 <- ggplot(genderCounts, aes(x = 2, y = prop, fill = Gender)) +
+  geom_bar(stat = "identity", color = "white") +
+  coord_polar(theta = "y", start = 0)+
+  geom_text(aes(y = lab.ypos, label = paste0(Gender, "(",round(prop), "%", ")")), color = "black")+
+  scale_fill_manual(values = mycols) +
+  theme_void()+
+  xlim(0.5, 2.5)+ theme(legend.position = "none")
+# selecting and tallying the age info
+ageCounts <- responseData %>% select(`What is your date of birth`) %>% 
+  rename(dob = `What is your date of birth`) %>% 
+  mutate(age = as.numeric(as.Date(currentDate) -as.Date(dob, "%d/%m/%Y"))/365.25) %>% 
+  mutate(Age = cut(age, 
+                       breaks = c(18, 25, 36,  Inf), 
+                       labels = c("18-25", "26-35", "36 + "), 
+                       right = FALSE)) %>% filter(!is.na(Age)) %>% 
+  group_by(Age) %>% summarise(n = n()) %>% 
+  mutate(prop = n*100/sum(n))
+
+# Add label position
+ageCounts <- ageCounts %>%
+  arrange(desc(Age)) %>%
+  mutate(lab.ypos = cumsum(prop) - 0.5*prop)
+# colors to use
+mycols <- c("red", "orange")
+# plotting a donut plot of the summarised data
+p2 <- ggplot(ageCounts, aes(x = 2, y = prop, fill = Age)) +
+  geom_bar(stat = "identity", color = "white") +
+  coord_polar(theta = "y", start = 0)+
+  geom_text(aes(y = lab.ypos, label = paste0(Age, " years ", "(",round(prop), "%", ")")), color = "black")+
+  scale_fill_manual(values = mycols) +
+  theme_void()+
+  xlim(0.5, 2.5)+ theme(legend.position = "none")
+grid.arrange(p1, p2, ncol=2)
+```
+
+#### Frequency table of Age vs Gender
+
+```{r, message=FALSE, warning=FALSE}
+ageData <- responseData %>% 
+  select(`What is your date of birth`,
+         `What is your gender`,
+         `Which AIMS center are you attending or did you attend?`) %>%
+  rename(dob = `What is your date of birth`) %>% 
+  mutate(Age = as.numeric(as.Date(currentDate) -as.Date(dob, "%d/%m/%Y"))/365.25,
+         Age = cut(Age, breaks = c(18, 25, 36,  Inf), 
+                   labels = c("18-25", "26-35", "36 +"), 
+                   right = FALSE)) %>% filter(!is.na(Age)) %>% select(4,2,3)
+# print the table
+ft <- autofit(flextable(genderTableMaker("Age", ageData) %>% 
+                          filter(Freq != 0) %>%
+                          rename("Age(years)" = Option, "AgeByGender(%)" = "OptionByGender(%)","Age(%)" = "Option(%)")))
+fit_to_width(ft, max_width = 8)
+
+```
+
+
+
+## During AIMS
+### Role and purpose of AIMS
+#### Main purpose of AIMS according to participants, based on weighted top three ranking
+Question: Now that you have completed your studies at AIMS, please select and rank the THREE main purposes of AIMS according to you. RESPOND WITH 1,2 and 3 and ensure you pick only 3 items.
+
+```{r include=FALSE}
+purposePattern <- "Now that you have completed your studies at AIMS, please select and rank the THREE main purposes of AIMS according to you. RESPOND WITH 1,2 and 3 and ensure you pick only 3 items."
+purposeData1 <- responseData %>% 
+  select(starts_with(purposePattern)) 
+names(purposeData1) <- names(purposeData1)%>% gsub(purposePattern,"",.)
+
+#A lil bit of preprocessing to prepare the data for analysis
+purposeData1[23,1] <- 3
+purposeData2 <- t(purposeData1[-c(28,35,49),-length(colnames(purposeData1))])
+# calculating the weigted ranks using weights (3,2,1) for ranks (1,2,3)
+purposeData <-  purposeData2 %>% as.data.frame() %>% 
+  transmute('rank 1' = apply(., 1, function(x) length(which(as.numeric(x) == 1))),
+            'rank 2' = apply(., 1, function(x) length(which(as.numeric(x) == 2))),
+            'rank 3' = apply(., 1, function(x) length(which(as.numeric(x) == 3)))) %>% 
+  mutate(score = apply(., 1, function(x) sum(x * c(3,2,1)))) %>% 
+  mutate("Purpose" = rownames(purposeData2)) %>% arrange(score)
+purposeData <- purposeData[,c(5,1:4)]
+# break long sentences into multiple lines
+purposeData$Purpose <-  sapply(purposeData$Purpose, function(s) gsub('(.{1,40})(\\s|$)', '\\1\n', s))
+# final data to plot
+purposeData$Purpose <- factor(purposeData$Purpose,levels=purposeData$Purpose)
+```
+
+```{r echo=FALSE}
+ggplot(data=purposeData, aes(x=Purpose, y = score)) +
+  geom_bar(fill="maroon", stat = "identity") + 
+  coord_flip()+ theme_minimal() + ylab("")+ xlab("")+
+  theme(panel.background = element_blank(), legend.position = "none")
+```
+
+
+#### Main purpose of the AIMS centers according to participants, based on weighted top three ranking 
+
+```{r message=TRUE, warning=TRUE, include=FALSE}
+# obtaining top ranked purposes with their ranks for a given centre
+purposePattern <- "Now that you have completed your studies at AIMS, please select and rank the THREE main purposes of AIMS according to you. RESPOND WITH 1,2 and 3 and ensure you pick only 3 items."
+centrewisePurpose1 <- responseData %>%
+select(`Which AIMS center are you attending or did you attend?`,starts_with(purposePattern))
+names(centrewisePurpose1)[2:dim(centrewisePurpose1)[2]] <- names(centrewisePurpose1)[2:dim(centrewisePurpose1)[2]]%>% gsub(purposePattern,"",.)
+# A lil bit of preprocessing to prepare the data for analysis
+centrewisePurpose1[23,2] <- 3
+centrewisePurpose2 <- centrewisePurpose1[-c(28,35,49),-length(colnames(centrewisePurpose1))]
+# calculating the weigted ranks suign weights (3,2,1) for ranks (1,2,3)
+rankedPurposes <- function(centre){
+  purposeData3 <- centrewisePurpose2[
+    which(centrewisePurpose2$`Which AIMS center are you attending or did you attend?` == 
+            centre),]
+  purposeData <- purposeData3 %>% 
+    select(-c(`Which AIMS center are you attending or did you attend?`)) %>%t() %>%  
+    as.data.frame() %>% 
+    transmute('rank 1' = apply(., 1, function(x) length(which(as.numeric(x) == 1))),
+              'rank 2' = apply(., 1, function(x) length(which(as.numeric(x) == 2))),
+              'rank 3' = apply(., 1, function(x) length(which(as.numeric(x) == 3)))) %>% 
+    mutate(score = apply(., 1, function(x) sum(x * c(3,2,1)))) %>% 
+    mutate("Purpose" = rownames(purposeData2)) %>% select(c(5,1:4)) %>% arrange(desc(score))%>% 
+    mutate(Top3 = rank(desc(score))) %>% select(c(Purpose, Top3))
+  return(purposeData)
+}
+
+# Extracting and combining ranked purposes for all centre
+df1 <- data.frame(Purpose = colnames(centrewisePurpose2[-1]),
+                  dummy = rep(0, length(colnames(centrewisePurpose2))-1))
+for(i in unique(centrewisePurpose2$`Which AIMS center are you attending or did you attend?`)){
+  df2 <- rankedPurposes(i)
+  colnames(df2)[2] <- i
+  df1 <- left_join(df1,df2, by = 'Purpose')
+}
+
+#preprocessing for plotting
+df3 <- df1 %>% select(-c(1,2))
+df3[df3 > 3] <- NA
+df4 <- cbind(df1[,1],df3)
+df5 <- df4[rowSums(df4[,-1],na.rm = TRUE) !=0,]
+colnames(df5)[1] <- "Purpose"
+melted_cormat <- melt(df5)
+
+colors <- c("red", "#33658A", "maroon", "orange", "white")
+```
+
+```{r echo=FALSE, fig.height=6, fig.width=9, message=FALSE, warning=FALSE}
+# plotting a heatmap for the top 3 ranks for each centre
+ggplot(data = melted_cormat, aes(x=variable, y=Purpose)) + 
+  geom_tile(aes(fill = factor(value))) +   scale_fill_manual(values=colors) +
+  theme_gray() + ylab("")+ xlab("") +   geom_text(aes(label = round(value, 2))) +
+  theme(panel.background = element_blank(), legend.position = "none")+
+  scale_x_discrete(position = "top") 
+```
+
+
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# ++++++++++++++++++++++++++++++++++++++ Gender Vs Purpose ++++++++++++++++++++++++++++++++
+purposeData1 <- responseData %>% 
+  select(starts_with(purposePattern)) 
+names(purposeData1) <- names(purposeData1)%>% gsub(purposePattern,"",.)
+
+# A lil bit of preprocessing to prepare the data for analysis
+purposeData1[23,1] <- 3
+purposeData2 <- t(purposeData1[-c(28,35,49),-length(colnames(purposeData1))])
+
+genderwisePurpose1 <- responseData %>%
+  select(`What is your gender`,starts_with(purposePattern))
+names(genderwisePurpose1)[2:dim(genderwisePurpose1)[2]] <- names(genderwisePurpose1)[2:dim(genderwisePurpose1)[2]]%>% gsub(purposePattern,"",.)
+#A lil bit of preprocessing to prepare the data for analysis
+genderwisePurpose1[23,2] <- 3
+genderwisePurpose2 <- genderwisePurpose1[-c(28,35,49),-length(colnames(genderwisePurpose1))]
+# calculating the weigted ranks suign weights (3,2,1) for ranks (1,2,3)
+rankedPurposes2 <- function(gender){
+  purposeData3 <- genderwisePurpose2[
+    which(genderwisePurpose2$`What is your gender` == 
+            gender),]
+  purposeData <- purposeData3 %>% 
+    select(-c(`What is your gender`)) %>%t() %>%  
+    as.data.frame() %>% 
+    transmute('rank 1' = apply(., 1, function(x) length(which(as.numeric(x) == 1))),
+              'rank 2' = apply(., 1, function(x) length(which(as.numeric(x) == 2))),
+              'rank 3' = apply(., 1, function(x) length(which(as.numeric(x) == 3)))) %>% 
+    mutate(score = apply(., 1, function(x) sum(x * c(3,2,1)))) %>% 
+    mutate("Purpose" = rownames(purposeData2)) %>% select(c(5,1:4)) %>% arrange(desc(score))%>% 
+    mutate(Top3 = rank(desc(score))) %>% select(c(Purpose, Top3))
+  return(purposeData)
+}
+
+#Extracting and combining ranked purposes for all centre
+genderdf1 <- data.frame(Purpose = colnames(genderwisePurpose2[-1]),
+                  dummy = rep(0, length(colnames(genderwisePurpose2))-1))
+for(i in unique(genderwisePurpose2$`What is your gender`)){
+  genderdf2 <- rankedPurposes2(i)
+  colnames(genderdf2)[2] <- i
+  genderdf1 <- left_join(genderdf1,genderdf2, by = 'Purpose')
+}
+
+# final plotting data
+genderVsPurpose <- genderdf1 %>% select(-c(2)) %>% mutate_if(is.numeric,as.integer)
+
+# ++++++++++++++++++++++++++++++ Centre Vs Purpose ++++++++++++++++++++++++++++++++++++++
+centrewisePurpose1 <- responseData %>%
+  select(`Which AIMS center are you attending or did you attend?`,starts_with(purposePattern))
+names(centrewisePurpose1)[2:dim(centrewisePurpose1)[2]] <- names(centrewisePurpose1)[2:dim(centrewisePurpose1)[2]]%>% gsub(purposePattern,"",.)
+#A lil bit of preprocessing to prepare the data for analysis
+centrewisePurpose1[23,2] <- 3
+centrewisePurpose2 <- centrewisePurpose1[-c(28,35,49),-length(colnames(centrewisePurpose1))]
+#calculating the weigted ranks suign weights (3,2,1) for ranks (1,2,3)
+rankedPurposes <- function(centre){
+  purposeData3 <- centrewisePurpose2[
+    which(centrewisePurpose2$`Which AIMS center are you attending or did you attend?` == 
+            centre),]
+  purposeData <- purposeData3 %>% 
+    select(-c(`Which AIMS center are you attending or did you attend?`)) %>%t() %>%  
+    as.data.frame() %>% 
+    transmute('rank 1' = apply(., 1, function(x) length(which(as.numeric(x) == 1))),
+              'rank 2' = apply(., 1, function(x) length(which(as.numeric(x) == 2))),
+              'rank 3' = apply(., 1, function(x) length(which(as.numeric(x) == 3)))) %>% 
+    mutate(score = apply(., 1, function(x) sum(x * c(3,2,1)))) %>% 
+    mutate("Purpose" = rownames(purposeData2)) %>% select(c(5,1:4)) %>% arrange(desc(score))%>% 
+    mutate(Top3 = rank(desc(score))) %>% select(c(Purpose, Top3))
+  return(purposeData)
+}
+
+#Extracting and combining ranked purposes for all centre
+centredf1 <- data.frame(Purpose = colnames(centrewisePurpose2[-1]),
+                  dummy = rep(0, length(colnames(centrewisePurpose2))-1))
+for(i in unique(centrewisePurpose2$`Which AIMS center are you attending or did you attend?`)){
+  centredf2 <- rankedPurposes(i)
+  colnames(centredf2)[2] <- i
+  centredf1 <- left_join(centredf1,centredf2, by = 'Purpose')
+}
+
+# final plotting data
+centreVsPurpose <- centredf1 %>% select(-c(2))%>% mutate_if(is.numeric,as.integer)
+```
+
+#### Weighted ranking of the main purpose of AIMS by Gender
+
+```{r echo=FALSE}
+ft <- autofit(flextable(genderVsPurpose)) 
+fit_to_width(ft, max_width = 8)
+```
+
+#### Weighted ranking of the main purpose of AIMS by Centre
+
+```{r echo=FALSE}
+ft <- autofit(flextable(centreVsPurpose)) 
+fit_to_width(ft, max_width = 8)
+```
+
+
+<!-------------------- Plotting data processing for the rest of the analysis---------->
+```{r include=FALSE}
+# +++++++++++++++++++++++++++++ Centre representation +++++++++++++++++++++++++++++++++++++++
+centreReprsn <- responseData %>% group_by(`Which AIMS center are you attending or did you attend?`) %>% 
+  count() %>% rename(freq = n)
+centreReprsn2 <- centreReprsn %>% 
+  mutate(propn=`freq`/sum(centreReprsn$freq), Grade = `Which AIMS center are you attending or did you attend?`) %>% 
+  arrange(desc(freq))
+centreReprsn2$Grade <- factor(centreReprsn2$Grade, levels = centreReprsn2$Grade)
+
+# ++++++++++++++++++++++++ post AIMS plans (6 months) +++++++++++++++++++++++++++
+sixMonthsPlans <- responseData %>% 
+  rename(plans ="What plans do you have after AIMS (within the next 6 months after completing AIMS)?") %>% 
+  group_by(plans) %>% count() %>% rename(freq = n)%>% arrange(freq) %>% filter(!is.na(plans))
+sixMonthsPlans$plans <- str_replace_all(sixMonthsPlans$plans, "\\(please specify\\)", "")
+sixMonthsPlans$plans <- sapply(sixMonthsPlans$plans, function(s) gsub('(.{1,40})(\\s|$)', '\\1\n', s))
+
+sixMonthsPlans2 <- sixMonthsPlans %>% 
+  mutate(propn=`freq`/sum(sixMonthsPlans$freq), Grade = plans) %>% 
+  arrange(desc(freq))
+# final data to plot
+sixMonthsPlans2$Grade <- factor(sixMonthsPlans2$Grade, levels = sixMonthsPlans2$Grade)
+sixMonthsPlansOther <- responseData$`What plans do you have after AIMS (within the next 6 months after completing AIMS)?Other (please specify)`
+sixMonthsPlansOther <- sixMonthsPlansOther[!is.na(sixMonthsPlansOther)]
+
+# ++++++++++++++++++++++++ was it the first choice +++++++++++++++++++++++++++
+asFirstChoice <- responseData %>% 
+  rename(response ="Would you say the above plan was your first choice?") %>% 
+  group_by(response) %>% count() %>% rename(freq = n)%>% arrange(freq) %>% filter(!is.na(response))
+
+asFirstChoice2 <- asFirstChoice %>% 
+  mutate(propn=`freq`/sum(asFirstChoice$freq), Grade = response) %>% 
+  arrange(desc(freq))
+# final data to plot
+asFirstChoice2$Grade <- factor(asFirstChoice2$Grade, levels = asFirstChoice2$Grade)
+
+# if not, why choose it
+notFirstChoice <- responseData$`If not, why did you choose this path?`
+notFirstChoice <- notFirstChoice[!is.na(notFirstChoice)]
+
+# +++++++++++++++++++++++++++++++++ Next step +++++++++++++++++++++++++++++++++++
+extent1 <- responseData %>% 
+  rename(support =`To what extent do you feel AIMS facilitated the next step in your career?`) %>% 
+  group_by(support) %>% count() %>% rename(freq = n)%>% arrange(freq) %>% filter(!is.na(support))
+
+extent2 <- extent1 %>% 
+  mutate(propn=`freq`/sum(extent1$freq), Grade = support) %>% 
+  arrange(desc(freq))
+# final data to plot
+extent2$Grade <- factor(extent2$Grade, levels = extent2$Grade)
+
+# +++++++++++++++++++++++ Sectors of research ++++++++++++++++++++++++++++++++++
+researchSectors <- responseData %>% rename(`research focus` =  `Which broad sector did your research at AIMS focus on?`) %>% 
+  group_by(`research focus`) %>% count() %>% rename(freq = n)
+
+researchSectors[3, "freq"] <- researchSectors[3, "freq"] + researchSectors[1, "freq"]
+researchSectors <- researchSectors[-1,]
+researchSectors$`research focus` <- str_replace_all(researchSectors$`research focus`, "\\(please specify\\)", "")
+
+researchSectors2 <- researchSectors %>% 
+  mutate(propn=`freq`/sum(researchSectors$freq), Grade = `research focus`) %>% 
+  arrange(desc(freq))
+researchSectors2$Grade <- factor(researchSectors2$Grade, levels = researchSectors2$Grade)
+
+researchSectorsOthers <- responseData$`Which broad sector did your research at AIMS focus on?Other (please specify)`
+researchSectorsOthers <- researchSectorsOthers[!is.na(researchSectorsOthers)]
+
+# ++++++++++++++++++++++++ likely to happen now that AIMS is done  +++++++++++++++++++++++++++
+likelyToHappen <- responseData %>% 
+  rename(plans ="Please describe the scenario as it is or what is most likely to happen now that you have completed AIMS. I will;") %>% 
+  group_by(plans) %>% count() %>% rename(freq = n)%>% arrange(freq) %>% filter(!is.na(plans))
+likelyToHappen$plans <- str_replace_all(likelyToHappen$plans, "\\(please specify\\)", "")
+likelyToHappen$plans <- sapply(likelyToHappen$plans, function(s) gsub('(.{1,40})(\\s|$)', '\\1\n', s))
+
+likelyToHappen2 <- likelyToHappen %>% 
+  mutate(propn=`freq`/sum(likelyToHappen$freq), Grade = plans) %>% 
+  arrange(desc(freq))
+# final data to plot
+likelyToHappen2$Grade <- factor(likelyToHappen2$Grade, levels = likelyToHappen2$Grade)
+
+likelyToHappenOther <- responseData$`Please describe the scenario as it is or what is most likely to happen now that you have completed AIMS. I will;Other (please specify)`
+likelyToHappenOther <- likelyToHappenOther[!is.na(likelyToHappenOther)]
+
+# +++++++++++++++++++++++++++++ Study focus +++++++++++++++++++++++++++++++++++++++
+studyFocus <- responseData %>% group_by(`What is your academic focus now?`) %>% 
+  count() %>% rename(freq = n)
+studyFocus[c(6,7,8),1] <- c("Mathematical Biology", "Other", "Physics")
+studyFocus2 <- studyFocus %>% 
+  mutate(propn=`freq`/sum(studyFocus$freq), Grade = `What is your academic focus now?`) %>% 
+  arrange(desc(freq))
+studyFocus2$Grade <- factor(studyFocus2$Grade, levels = studyFocus2$Grade)
+
+# +++++++++++++++++++++++++++++ change in academic focus +++++++++++++++++++++++++++
+focusChange <- responseData %>% 
+  rename(`Change of academic focus` = "If your academic focus changed while studying at AIMS, to what extent do you feel AIMS influenced this?") %>% 
+  group_by(`Change of academic focus`) %>% 
+  count() %>% rename(freq = n) %>% arrange(freq)
+
+focusChange$`Change of academic focus` <- factor(focusChange$`Change of academic focus`,levels=focusChange$`Change of academic focus`)
+
+# Plotting the horizontal bar plot
+focusChangePlot <- ggplot(data=focusChange, aes(x=`Change of academic focus`, y = freq)) +
+  geom_bar(fill="maroon", stat = "identity") +
+  coord_flip()+ theme_minimal() + ylab("")+ xlab("") 
+
+# +++++++++++++++++++++++++++++ future goals     +++++++++++++++++++++++++++++++
+futureself <- responseData %>% 
+  rename(plans ="Choose ONE statement that best describes where you would like to see yourself after graduating from AIMS.") %>% 
+  group_by(plans) %>% count() %>% rename(freq = n)%>% arrange(freq) %>% filter(!is.na(plans))
+futureself$plans <- str_replace_all(futureself$plans, "\\(please specify\\)", "")
+futureself$plans <- sapply(futureself$plans, function(s) gsub('(.{1,40})(\\s|$)', '\\1\n', s))
+
+futureself2 <- futureself %>% 
+  mutate(propn=`freq`/sum(futureself$freq), Grade = plans) %>% 
+  arrange(desc(freq))
+# final data to plot
+futureself2$Grade <- factor(futureself2$Grade, levels = futureself2$Grade)
+futureselfOther <- responseData$`Choose ONE statement that best describes where you would like to see yourself after graduating from AIMS.Other (please specify)`
+futureselfOther <- futureselfOther[!is.na(futureselfOther)]
+
+# ++++++++++++++++++++++++ post grad geographic plans +++++++++++++++++++++++++++
+postAIMSplans <- responseData %>% 
+  rename(destination ="Where do you plan to go immediately after AIMS?(Either to work, study or stay?)") %>% 
+  group_by(destination) %>% count() %>% rename(freq = n)%>% arrange(freq) %>% filter(!is.na(destination))
+postAIMSplans$destination <- str_replace_all(postAIMSplans$destination, "\\(please specify\\)", "")
+postAIMSplans$destination <- sapply(postAIMSplans$destination, function(s) gsub('(.{1,40})(\\s|$)', '\\1\n', s))
+
+postAIMSplans2 <- postAIMSplans %>% 
+  mutate(propn=`freq`/sum(postAIMSplans$freq), Grade = destination) %>% 
+  arrange(desc(freq))
+# final data to plot
+postAIMSplans2$Grade <- factor(postAIMSplans2$Grade, levels = postAIMSplans2$Grade)
+postAIMSplansOther <- responseData$`Where do you plan to go immediately after AIMS?(Either to work, study or stay?)Other (please specify)`
+
+# ++++++++++++++++++++++++ plans to return to Africa +++++++++++++++++++++++++++
+africaReturn <- responseData %>% 
+  rename(destination ="If you plan to leave Africa, do you intend to come back to Africa?") %>% 
+  group_by(destination) %>% count() %>% rename(freq = n)%>% arrange(freq) %>% filter(!is.na(destination))
+africaReturn$destination <- str_replace_all(africaReturn$destination, "\\(please specify\\)", "")
+africaReturn$destination <- sapply(africaReturn$destination, function(s) gsub('(.{1,40})(\\s|$)', '\\1\n', s))
+
+africaReturn2 <- africaReturn %>% 
+  mutate(propn=`freq`/sum(africaReturn$freq), Grade = destination) %>% 
+  arrange(desc(freq))
+# final data to plot
+africaReturn2$Grade <- factor(africaReturn2$Grade, levels = africaReturn2$Grade)
+
+commentOnReturn <- responseData$"Please comment on why you intend to come back to your country or not if you plan to leave after AIMS."
+
+# ++++++++++++++++++++++++++++++++ Public, private or non profit +++++++++++
+servicePattern <- "Please indicate your level of interest in pursuing the following career paths"
+service <- responseData %>% 
+  select(starts_with(servicePattern)) 
+names(service) <- names(service)%>% gsub("Please indicate your level of interest in pursuing the following career paths \\(","",.)
+names(service) <- names(service)%>% gsub("\\)","",.)
+
+
+service1 <- service%>%  t() %>% 
+  as.data.frame() %>% 
+  transmute("Very interested" = apply(., 1, function(x) length(which(x == "Very interested"))),
+            "Not interested" = apply(., 1, function(x) length(which(x == "Not interested"))),
+            "Somewhat interested" = apply(., 1, function(x) length(which(x == "Somewhat interested")))) %>% 
+  mutate("skills" = colnames(service)) %>% select(c(4,1:3))
+
+# Calculate percentages and label positions
+service2 <- service1 %>% gather("selfEvaluation", response, 2:4) %>% 
+  group_by(skills) %>% 
+  mutate(percent=response/sum(response))
+# final data to plot
+service2$selfEvaluation <- factor(service2$selfEvaluation, levels = c("Somewhat interested","Not interested","Very interested"))
+
+# ++++++++++++++++++++++++ Quality of AIMS ++++++++++++++++++++++++++++++++++++++
+qualityPattern <- "How valuable (important) would you say the items below were to you while studying at AIMS?"
+qualityAIMS1 <- responseData %>% 
+  select(starts_with(qualityPattern)) 
+names(qualityAIMS1) <- names(qualityAIMS1)%>% gsub("How valuable \\(important\\) would you say the items below were to you while studying at AIMS\\?","",.)
+names(qualityAIMS1) <- names(qualityAIMS1)%>% gsub("\\(","",.)
+names(qualityAIMS1) <- names(qualityAIMS1)%>% gsub("\\)","",.)
+names(qualityAIMS1) <-  sapply(names(qualityAIMS1), function(s) gsub('(.{1,30})(\\s|$)', '\\1\n', s))
+qualityAIMS2 <- qualityAIMS1 %>% t() %>% 
+  as.data.frame() %>% 
+  transmute('Very Valuable' = apply(., 1, function(x) length(which(x == "Very Valuable"))),
+            'Somewhat valuable' = apply(., 1, function(x) length(which(x == "Somewhat valuable"))),
+            'Not at all valuable' = apply(., 1, function(x) length(which(x == "Not at all valuable")))) %>% 
+  mutate("skills" = colnames(qualityAIMS1)) %>% select(c(4,1:3))
+
+# Calculate percentages and label positions
+qualityAIMS3 <- qualityAIMS2 %>% gather(selfEvaluation, response, 2:4) %>% 
+  group_by(skills) %>% 
+  mutate(percent=response/sum(response))
+# final data to plot
+qualityAIMS3$selfEvaluation <- factor(qualityAIMS3$selfEvaluation,
+                                      levels = c("Not at all valuable","Somewhat valuable","Very Valuable"))
+
+# +++++++++++++++++++++++ Other individual opinions +++++++++++++++++++++++++++++++++++
+opinionsQns <- c("I am excited by the opportunity I had to study mathematics at AIMS",
+                   "I feel well-equipped by my studies at AIMS to study mathematics at an advanced (Research Master’s and PhD) level",
+                   "I find fundamental mathematics more interesting to study than applied mathematics",
+                   "I would love to continue a career in research, academic teaching and science",
+                   "I would prefer to work in industry (companies, government, or non-profit) after I graduate",
+                   "I believe I have the knowledge and skills to succeed in my career",
+                   "I know and believe mathematics has a lot to offer to African development’ challenges",
+                   "Men are generally intrinsically better in fundamental sciences than women",
+                   "I feel it is my responsibility to contribute to the development of Africa",
+                   "I feel I have the capability (knowledge, skills) to contribute to the development of Africa",
+                   "I believe community service (‘give back’) is an important activity",
+                   "Starting a business, myself is not a realistic or desirable path in life")
+
+opinions <- responseData %>%  select(opinionsQns)
+names(opinions) <-  sapply(names(opinions), function(s) gsub('(.{1,40})(\\s|$)', '\\1\n', s))
+
+opinions1 <- opinions%>%  t() %>% 
+  as.data.frame() %>% 
+  transmute("Strongly Agree" = apply(., 1, function(x) length(which(x == "Strongly Agree"))),
+            "Agree" = apply(., 1, function(x) length(which(x == "Agree"))),
+            "Disagree" = apply(., 1, function(x) length(which(x == "Disagree"))),
+            "Strongly Disagree" = apply(., 1, function(x) length(which(x == "Strongly Disagree"))),
+            "Neutral" = apply(., 1, function(x) length(which(x == "Neutral")))) %>% 
+  mutate("skills" = colnames(opinions)) %>% select(c(6,1:5))
+
+# Calculate percentages and label positions
+opinions2 <- opinions1 %>% gather("selfEvaluation", response, 2:6) %>% 
+  group_by(skills) %>% 
+  mutate(percent=response/sum(response))
+# final data to plot
+opinions2$selfEvaluation <- factor(opinions2$selfEvaluation, 
+                                     levels = unique(opinions2$selfEvaluation))
+
+# +++++++++++++++++++++++ migration abroad +++++++++++++++++++++++++++++++++++
+emigrationQns <- c("To succeed professionally, it will be necessary to leave Africa to pursue opportunities elsewhere",
+                   "Africa has plenty of opportunities for continuing a career where I can use mathematical skills directly",
+                   "My own country has plenty of opportunities for continuing a career where I can use mathematical skills directly")
+
+emigration <- responseData %>%  select(emigrationQns)
+names(emigration) <-  sapply(names(emigration), function(s) gsub('(.{1,40})(\\s|$)', '\\1\n', s))
+
+emigration1 <- emigration%>%  t() %>% 
+  as.data.frame() %>% 
+  transmute("Strongly Agree" = apply(., 1, function(x) length(which(x == "Strongly Agree"))),
+            "Agree" = apply(., 1, function(x) length(which(x == "Agree"))),
+            "Disagree" = apply(., 1, function(x) length(which(x == "Disagree"))),
+            "Strongly Disagree" = apply(., 1, function(x) length(which(x == "Strongly Disagree"))),
+            "Neutral" = apply(., 1, function(x) length(which(x == "Neutral")))) %>% 
+  mutate("skills" = colnames(emigration)) %>% select(c(6,1:5))
+
+# Calculate percentages and label positions
+emigration2 <- emigration1 %>% gather("selfEvaluation", response, 2:6) %>% 
+  group_by(skills) %>% 
+  mutate(percent=response/sum(response))
+# final data to plot
+emigration2$selfEvaluation <- factor(emigration2$selfEvaluation, 
+                                     levels = unique(emigration2$selfEvaluation))
+
+# +++++++++++++++++++++++++++++++++ Role fulfilment  ++++++++++++++++++++++++++++++
+fulfiled <- responseData %>% 
+  rename(fulfilment ="Given your current understanding of the role of AIMS, to what extent do you think AIMS has fulfilled its mandate?") %>% 
+  group_by(fulfilment) %>% count() %>% rename(freq = n)%>% arrange(freq) %>% filter(!is.na(fulfilment))
+
+fulfiled2 <- fulfiled %>% 
+  mutate(propn=`freq`/sum(fulfiled$freq), Grade = fulfilment) %>% 
+  arrange(desc(freq))
+# final data to plot
+fulfiled2$Grade <- factor(fulfiled2$Grade, levels = fulfiled2$Grade)
+
+# ########   Role fulfilment split by centre 
+roleOfAIMS1 <- responseData %>% rename(selfEvaluation = "Given your current understanding of the role of AIMS, to what extent do you think AIMS has fulfilled its mandate?",
+                                       skills = "Which AIMS center are you attending or did you attend?") %>% 
+  select(selfEvaluation, skills) %>% filter(!is.na(selfEvaluation)) %>% 
+    count(skills, selfEvaluation) %>% 
+  group_by(skills) %>% mutate(percent=n/sum(n))
+# final data to plot
+roleOfAIMS1$selfEvaluation <- factor(roleOfAIMS1$selfEvaluation, levels = c("Not at all","Somewhat","Satisfactorily","Fully", "Exceeded"))
+
+# +++++++++++++++++++++++++++++++ Meeting Academic expectations  ++++++++++++++++++++++++++++++
+expectations <- responseData %>% 
+  group_by(`To what extent did AIMS meet your expectations?`) %>% 
+  count() %>% rename(freq = n) %>% filter(!is.na(`To what extent did AIMS meet your expectations?`)) %>% arrange(freq) 
+
+expectations2 <- expectations %>% 
+  mutate(propn=`freq`/sum(expectations$freq), Grade = `To what extent did AIMS meet your expectations?`) %>% 
+  arrange(desc(freq))
+# final data to plot
+expectations2$Grade <- factor(expectations2$Grade, levels = expectations2$Grade)
+
+# ++++++++++++++++++++++++ Academic expectations split by centre ++++++++++++++++++++++++++++++
+academicAIMS1 <- responseData %>% rename(selfEvaluation = "To what extent did AIMS meet your expectations?",
+                                       skills = "Which AIMS center are you attending or did you attend?") %>% 
+  select(selfEvaluation, skills) %>% filter(!is.na(selfEvaluation)) %>% 
+  count(skills, selfEvaluation) %>% 
+  group_by(skills) %>% mutate(percent=n/sum(n))
+# final data to plot
+academicAIMS1$selfEvaluation <- factor(academicAIMS1$selfEvaluation, levels = c("Not at all,","To a small extent","To a moderate extent", "To a large extent"))
+
+# +++++++++++++++++++++++++ Skills and competences  ++++++++++++++++++++++++++++++++++++++
+skillsPattern <- "Think about your level of knowledge, skills and competences NOW. Rate yourself based on the items below, (limited, average or Excellenet/well developed)."
+skills <- responseData %>% 
+  select(starts_with(skillsPattern)) 
+names(skills) <- names(skills)%>% gsub("Think about your level of knowledge, skills and competences NOW. Rate yourself based on the items below, \\(limited, average or Excellenet/well developed\\).","",.)
+
+skills <- skills %>% select(-c("Ability to seek opportunities and apply for jobs related to your skills and expertise",
+                                "Job interview skills",
+                                "Knowledge and skills to start a business.")) 
+
+names(skills) <-  sapply(names(skills), function(s) gsub('(.{1,60})(\\s|$)', '\\1\n', s))
+
+skills1 <- skills%>%  t() %>% 
+  as.data.frame() %>% 
+  transmute('Excellent/Well developed' = apply(., 1, function(x) length(which(x == "Excellent/Well developed"))),
+            'Average' = apply(., 1, function(x) length(which(x == "Average"))),
+            'Limited' = apply(., 1, function(x) length(which(x == "Limited")))) %>% 
+  mutate("skills" = colnames(skills)) %>% select(c(4,1:3))
+# Calculate percentages and label positions
+skills2 <- skills1 %>% gather("selfEvaluation", response, 2:4) %>% 
+  group_by(skills) %>% 
+  mutate(percent=response/sum(response))
+# final data to plot
+skills2$selfEvaluation <- factor(skills2$selfEvaluation, 
+                                 levels = c("Limited","Average","Excellent/Well developed"))
+
+
+# +++++++++++++++++++++++leadership +++++++++++++++++++++++++++++++++++
+leadership1 <- responseData %>% 
+  rename(support =`Others generally see me as someone who takes initiative and exhibits strong leadership`) %>% 
+  group_by(support) %>% count() %>% rename(freq = n)%>% arrange(freq) %>% filter(!is.na(support))
+
+leadership2 <- leadership1 %>% 
+  mutate(propn=`freq`/sum(leadership1$freq), Grade = support) %>% 
+  arrange(desc(freq))
+# final data to plot
+leadership2$Grade <- factor(leadership2$Grade, levels = leadership2$Grade)
+
+# +++++++++++++++++++++++ confidence ++++++++++++++++++++++++++++++++++
+confidence1 <- responseData %>% 
+  rename(support =`I am confident and able to mobilize and lead my peers for a cause.`) %>% 
+  group_by(support) %>% count() %>% rename(freq = n)%>% arrange(freq) %>% filter(!is.na(support))
+
+confidence2 <- confidence1 %>% 
+  mutate(propn=`freq`/sum(confidence1$freq), Grade = support) %>% 
+  arrange(desc(freq))
+# final data to plot
+confidence2$Grade <- factor(confidence2$Grade, levels = confidence2$Grade)
+
+# +++++++++++++++++++++++++ Experience at AIMS ++++++++++++++++++++++++++++++++++++++
+experiencePattern <- "Please rate the following items from your experience at AIMS now that you have completed your studies at AIMS"
+experienceAIMS1 <- responseData %>% 
+  select(starts_with(experiencePattern)) 
+names(experienceAIMS1) <- names(experienceAIMS1)%>% gsub(experiencePattern,"",.)
+names(experienceAIMS1) <- names(experienceAIMS1)%>% gsub("\\. ","",.)
+
+experienceAIMS2 <- experienceAIMS1 %>% t() %>% 
+  as.data.frame() %>% 
+  transmute('Excellent' = apply(., 1, function(x) length(which(x == "Excellent"))),
+            'Average' = apply(., 1, function(x) length(which(x == "Average"))),
+            'Limited' = apply(., 1, function(x) length(which(x == "Limited")))) %>% 
+  mutate("skills" = colnames(experienceAIMS1)) %>% select(c(4,1:3))
+
+# Calculate percentages and label positions
+experienceAIMS3 <- experienceAIMS2 %>% gather("selfEvaluation", response, 2:4) %>% 
+  group_by(skills) %>% 
+  mutate(percent=response/sum(response))
+# final data to plot
+experienceAIMS3$selfEvaluation <- factor(experienceAIMS3$selfEvaluation, 
+                                         levels = c("Limited","Average","Excellent"))
+
+# ++++++++++++++++++++++++++++++++ job related skills and competences +++++++++++
+skillsPattern <- "Think about your level of knowledge, skills and competences NOW. Rate yourself based on the items below, (limited, average or Excellenet/well developed)."
+skills <- responseData %>% 
+  select(starts_with(skillsPattern)) 
+names(skills) <- names(skills)%>% gsub("Think about your level of knowledge, skills and competences NOW. Rate yourself based on the items below, \\(limited, average or Excellenet/well developed\\).","",.)
+
+jobSkills <- skills %>% select(c("Ability to seek opportunities and apply for jobs related to your skills and expertise",
+                              "Job interview skills",
+                              "Knowledge and skills to start a business.")) 
+names(jobSkills) <-  sapply(names(jobSkills), function(s) gsub('(.{1,40})(\\s|$)', '\\1\n', s))
+
+jobSkills1 <- jobSkills%>%  t() %>% 
+  as.data.frame() %>% 
+  transmute('Excellent/Well developed' = apply(., 1, function(x) length(which(x == "Excellent/Well developed"))),
+            'Average' = apply(., 1, function(x) length(which(x == "Average"))),
+            'Limited' = apply(., 1, function(x) length(which(x == "Limited")))) %>% 
+  mutate("skills" = colnames(jobSkills)) %>% select(c(4,1:3))
+
+# Calculate percentages and label positions
+jobSkills2 <- jobSkills1 %>% gather("selfEvaluation", response, 2:4) %>% 
+  group_by(skills) %>% 
+  mutate(percent=response/sum(response))
+# final data to plot
+jobSkills2$selfEvaluation <- factor(jobSkills2$selfEvaluation, levels = c("Limited","Average","Excellent/Well developed"))
+
+# +++++++++++++++++++++++ Africa's main development challenged ++++++++++++++++++++
+africaChallenges <- responseData$`In your opinion, what is the Africa's MAIN development challenge?Note: Not exceeding 50 words`
+africaChallenges <- africaChallenges[!is.na(africaChallenges)]
+
+# +++++++++++++++++++++++++++++ relation between science and development +++++++++++++++++++++++++
+sciDevPattern <- "To what extent;"
+sciDevReln <- responseData %>% 
+  select(starts_with(sciDevPattern)) 
+names(sciDevReln) <- names(sciDevReln)%>% gsub("To what extent;","",.)
+names(sciDevReln) <- names(sciDevReln)%>% str_replace_all("\\.","")
+names(sciDevReln) <-sapply(names(sciDevReln), function(s) gsub('(.{1,40})(\\s|$)', '\\1\n', s))
+sciDevReln <- sciDevReln[complete.cases(sciDevReln),]
+
+sciDevReln1 <- sciDevReln%>%  t() %>% 
+  as.data.frame() %>% 
+  transmute('To a great extent' = apply(., 1, function(x) length(which(x == "To a great extent"))),
+            'To a moderate extent' = apply(., 1, function(x) length(which(x == "To a moderate extent"))),
+            'Not at all' = apply(., 1, function(x) length(which(x == "Not at all")))) %>% 
+  mutate("skills" = colnames(sciDevReln)) %>% select(c(4,1:3))
+# Calculate percentages and label positions
+sciDevReln2 <- sciDevReln1 %>% gather("selfEvaluation", response, 2:4) %>% 
+  group_by(skills) %>% 
+  mutate(percent=response/sum(response))
+# final data to plot
+sciDevReln2$selfEvaluation <- factor(sciDevReln2$selfEvaluation, levels = c("Not at all","To a moderate extent","To a great extent"))
+
+# ++++++++++++++++++++++++ future roles for African development ++++++++++++
+futureRoles <- responseData$`What role do you see yourself playing, now or in the future, in applying mathematical sciences to address development challenges in Africa?`
+futureRoles <- futureRoles[!is.na(futureRoles)]
+
+# +++++++++++++++++++++++++++++++ Main priority +++++++++++++++++++++++++++
+priority1 <- responseData %>% 
+  rename(priority ="To what extent is it a main priority for you to contribute to Africa's development?") %>% 
+  group_by(priority) %>% count() %>% rename(freq = n)%>% arrange(freq) %>% filter(!is.na(priority))
+
+priority1[which(priority1$priority == "To a great extent, please explain"),"priority"] <- "To a great extent"
+
+priority2 <- priority1 %>% 
+  mutate(propn=`freq`/sum(priority1$freq), Grade = priority) %>% 
+  arrange(desc(freq))
+# final data to plot
+priority2$Grade <- factor(priority2$Grade, levels = priority2$Grade)
+
+# +++++++++++++++++++++++++++ contribution to AIMS ++++++++++++++++++++
+contribution1 <- responseData %>% 
+  rename(support =`In which areas do you feel you can contribute to AIMS?(Areas where AIMS can engage you.)`) %>% 
+  group_by(support) %>% count() %>% rename(freq = n)%>% arrange(freq) %>% filter(!is.na(support))
+contribution1$support <- str_replace_all(contribution1$support, "\\(please specify\\)", "")
+
+contribution2 <- contribution1 %>% 
+  mutate(propn=`freq`/sum(contribution1$freq), Grade = support) %>% 
+  arrange(desc(freq))
+contribution2$Grade <- factor(contribution2$Grade, levels = contribution2$Grade)
+# break long sentences into mulptiple line short ones
+contribution2$Grade <- sapply(contribution2$Grade, function(s) gsub('(.{1,20})(\\s|$)', '\\1\n', s))
+
+contributionOthers <- responseData$`In which areas do you feel you can contribute to AIMS?(Areas where AIMS can engage you.)Other (please specify)`
+contributionOthers <- contributionOthers[!is.na(contributionOthers)]
+
+financialContribution <- responseData$`If you (for example) had a monthly income of $1000, how much would you been willing to contribute towards your education at AIMS? Please explain`
+financialContribution <- financialContribution[!is.na(financialContribution)]
+
+# +++++++++++++++++++++++ recommendation of AIMS to others ++++++++++++++++++++++++++++++++
+recommendation1 <- responseData %>% 
+  rename(support =`Would you recommend AIMS to other young African men and women?`) %>% 
+  group_by(support) %>% count() %>% rename(freq = n)%>% arrange(freq) %>% filter(!is.na(support))
+
+recommendation2 <- recommendation1 %>% 
+  mutate(propn=`freq`/sum(recommendation1$freq), Grade = support) %>% 
+  arrange(desc(freq))
+# final data to plot
+recommendation2$Grade <- factor(recommendation2$Grade, levels = recommendation2$Grade)
+
+suggestions <- responseData$`Do you have any suggestions for improvement for AIMS, in particular for the preparation of students for their future career?`
+suggestions <- suggestions[!is.na(suggestions)]
+```
+
+<!-------- ----------------------------------tables------------------------------------------->
+
+```{r include=FALSE}
+# +++++++++++++++++++++++ migration  ++++++++++++++++++++++++++++++++
+migrationVsgender <- genderTableMaker("To succeed professionally, it will be necessary to leave Africa to pursue opportunities elsewhere", responseData)
+
+migrationVsCentre <- centreTableMaker("To succeed professionally, it will be necessary to leave Africa to pursue opportunities elsewhere", responseData)
+# +++++++++++++++++++++++ leadership  ++++++++++++++++++++++++++++++++
+leadershipVsgender <- genderTableMaker("Others generally see me as someone who takes initiative and exhibits strong leadership", responseData)
+
+leadershipVsCentre <- centreTableMaker("Others generally see me as someone who takes initiative and exhibits strong leadership", responseData)
+# +++++++++++++++++++++++ cofidence  ++++++++++++++++++++++++++++++++
+confidenceVsgender <- genderTableMaker("I am confident and able to mobilize and lead my peers for a cause.", responseData)
+
+confidenceVsCentre <- centreTableMaker("I am confident and able to mobilize and lead my peers for a cause.", responseData)
+
+# +++++++++++++++++++++++ recommendation ++++++++++++++++++++++++++++++++
+recommendationVsgender <- genderTableMaker("Would you recommend AIMS to other young African men and women?", responseData)
+
+recommendationVsCentre <- centreTableMaker("Would you recommend AIMS to other young African men and women?", responseData)
+
+# +++++++++++++++++++++++ Study focus during AIMS ++++++++++++++++++++++++++++++++
+studyFocusVsgender <- genderTableMaker("What is your academic focus now?", responseData)
+
+studyFocusVsCentre <- centreTableMaker("What is your academic focus now?", responseData)
+# +++++++++++++++++++++++++++++++ change in academic focus ++++++++++++++++++++++
+genderVsfocusChange <- genderTableMaker("If your academic focus changed while studying at AIMS, to what extent do you feel AIMS influenced this?", responseData)
+
+centreVsfocusChange <- centreTableMaker("If your academic focus changed while studying at AIMS, to what extent do you feel AIMS influenced this?", responseData)
+# ++++++++++++++++++++++++ Sectors of research ++++++++++++++++++++++++++++++++++
+genderVsResearch <- genderTableMaker("Which broad sector did your research at AIMS focus on?", responseData)
+
+centreVsResearch <- centreTableMaker("Which broad sector did your research at AIMS focus on?", responseData)
+# +++++++++++++++++++++++++++++++++ Role fulfilment  ++++++++++++++++++++++++++++++
+genderVsFulfiled <- genderTableMaker("Given your current understanding of the role of AIMS, to what extent do you think AIMS has fulfilled its mandate?", responseData)
+
+centreVsFulfiled <- centreTableMaker("Given your current understanding of the role of AIMS, to what extent do you think AIMS has fulfilled its mandate?", responseData)
+
+# +++++++++++++++++++++++++++++++++ Meeting Academic expectations  ++++++++++++++++++++++++++++++
+genderVsexpectations <- genderTableMaker("To what extent did AIMS meet your expectations?", responseData)
+
+centreVsexpectations <- centreTableMaker("To what extent did AIMS meet your expectations?", responseData)
+
+# ++++++++++++++++++++++++ post grad geographic plans +++++++++++++++++++++++++++
+genderVsPostAIMSplans <- genderTableMaker("Where do you plan to go immediately after AIMS?(Either to work, study or stay?)", responseData)
+
+
+centreVsPostAIMSplans <- centreTableMaker("Where do you plan to go immediately after AIMS?(Either to work, study or stay?)", responseData)
+
+# +++++++++++++++++++++++++ Main priority +++++++++++++++++++++++++++
+genderVsPriority <- genderTableMaker("To what extent is it a main priority for you to contribute to Africa's development?", responseData)
+
+centreVsPriority <- centreTableMaker("To what extent is it a main priority for you to contribute to Africa's development?", responseData)
+
+# +++++++++++++++++++++++++ contribution to AIMS ++++++++++++++++++++
+genderVsNextstep <- genderTableMaker("To what extent do you feel AIMS facilitated the next step in your career?", responseData)
+
+centreVsNextstep <- centreTableMaker("To what extent do you feel AIMS facilitated the next step in your career?", responseData)
+# ++++++++++++++++++++++++++ Extent to which AIMS facilitated the next step ++++++++++
+studyFocusVsgender <- genderTableMaker("What is your academic focus now?", responseData)
+
+studyFocusVsCentre <- centreTableMaker("What is your academic focus now?", responseData)
+# ++++++++++++++++++++++++++ contribution to AIMS ++++++++++++++++++++++++++++++++++++
+genderVsContribution <- genderTableMaker("In which areas do you feel you can contribute to AIMS?(Areas where AIMS can engage you.)", responseData)
+
+centreVsContribution <- centreTableMaker("In which areas do you feel you can contribute to AIMS?(Areas where AIMS can engage you.)", responseData)
+
+# ++++++++++++++++++++++++ Quality of AIMS ++++++++++++++++++++++++++++++++++++++
+qualityPattern <- "How valuable (important) would you say the items below were to you while studying at AIMS?"
+maleVsquality <- responseData %>%   filter(`What is your gender` == "Male") %>% 
+  select(starts_with(qualityPattern)) 
+names(maleVsquality) <- names(maleVsquality)%>% gsub("How valuable \\(important\\) would you say the items below were to you while studying at AIMS\\?","",.)
+names(maleVsquality) <- names(maleVsquality)%>% gsub("\\(","",.)
+names(maleVsquality) <- names(maleVsquality)%>% gsub("\\)","",.)
+
+maleVsquality2 <- maleVsquality %>% t() %>% 
+  as.data.frame() %>% 
+  transmute('Very Valuable(%)' = apply(., 1, function(x) length(which(x == "Very Valuable"))),
+            'Somewhat valuable(%)' = apply(., 1, function(x) length(which(x == "Somewhat valuable"))),
+            'Not at all valuable(%)' = apply(., 1, function(x) length(which(x == "Not at all valuable")))) %>% 
+  mutate("Quality" = colnames(maleVsquality)) %>% select(c(4,1:3))%>% replace(., is.na(.), 0)
+
+names_to_transform <- names(maleVsquality2)[2:4]
+maleVsquality3<- maleVsquality2 %>%
+  mutate(`Total counts` = rowSums(.[names_to_transform])) %>%
+  mutate_at(names_to_transform, funs((./`Total counts`)*100))%>% 
+  mutate_if(is.numeric,round)
+# +++++++++++++++++++++++++++++++++++++ female ++++++++++++++++++
+femaleVsquality <- responseData %>% filter(`What is your gender` == "Female") %>% 
+  select(starts_with(qualityPattern)) 
+names(femaleVsquality) <- names(femaleVsquality)%>% gsub("How valuable \\(important\\) would you say the items below were to you while studying at AIMS\\?","",.)
+names(femaleVsquality) <- names(femaleVsquality)%>% gsub("\\(","",.)
+names(femaleVsquality) <- names(femaleVsquality)%>% gsub("\\)","",.)
+
+femaleVsquality2 <- femaleVsquality %>% t() %>% 
+  as.data.frame() %>% 
+  transmute('Very Valuable(%)' = apply(., 1, function(x) length(which(x == "Very Valuable"))),
+            'Somewhat valuable(%)' = apply(., 1, function(x) length(which(x == "Somewhat valuable"))),
+            'Not at all valuable(%)' = apply(., 1, function(x) length(which(x == "Not at all valuable")))) %>% 
+  mutate("Quality" = colnames(femaleVsquality)) %>% select(c(4,1:3))%>% mutate_if(is.numeric,as.integer)
+
+names_to_transform <- names(femaleVsquality2)[2:4]
+femaleVsquality3<- femaleVsquality2 %>%
+  mutate(`Total counts` = rowSums(.[names_to_transform])) %>%
+  mutate_at(names_to_transform, funs((./`Total counts`)*100))%>% 
+  mutate_if(is.numeric,round)
+
+# +++++++++++++++++++++++++ Experience at AIMS ++++++++++++++++++++++++++++++++++++++
+experiencePattern <- "Please rate the following items from your experience at AIMS now that you have completed your studies at AIMS"
+femaleExperience <- responseData %>% filter(`What is your gender` == "Female") %>% 
+  select(starts_with(experiencePattern)) 
+names(femaleExperience) <- names(femaleExperience)%>% gsub(experiencePattern,"",.)
+
+femaleExperience2 <- femaleExperience %>% t() %>% 
+  as.data.frame() %>% 
+  transmute('Excellent(%)' = apply(., 1, function(x) length(which(x == "Excellent"))),
+            'Average(%)' = apply(., 1, function(x) length(which(x == "Average"))),
+            'Limited(%)' = apply(., 1, function(x) length(which(x == "Limited")))) %>% 
+  mutate("Experience(%)" = colnames(femaleExperience)) %>% select(c(4,1:3))%>% replace(., is.na(.), 0)
+
+names_to_transform <- names(femaleExperience2)[2:4]
+femaleExperience3<- femaleExperience2 %>%
+  mutate(`Total counts` = rowSums(.[names_to_transform])) %>%
+  mutate_at(names_to_transform, funs((./`Total counts`)*100))%>% 
+  mutate_if(is.numeric,round)
+#######   male
+maleExperience <- responseData %>% filter(`What is your gender` == "Male") %>% 
+  select(starts_with(experiencePattern)) 
+names(maleExperience) <- names(maleExperience)%>% gsub(experiencePattern,"",.)
+
+maleExperience2 <- maleExperience %>% t() %>% 
+  as.data.frame() %>% 
+  transmute('Excellent(%)' = apply(., 1, function(x) length(which(x == "Excellent"))),
+            'Average(%)' = apply(., 1, function(x) length(which(x == "Average"))),
+            'Limited(%)' = apply(., 1, function(x) length(which(x == "Limited")))) %>% 
+  mutate("Experience(%)" = colnames(maleExperience)) %>% select(c(4,1:3))%>% replace(., is.na(.), 0)
+
+names_to_transform <- names(maleExperience2)[2:4]
+maleExperience3<- maleExperience2 %>%
+  mutate(`Total counts` = rowSums(.[names_to_transform])) %>%
+  mutate_at(names_to_transform, funs((./`Total counts`)*100))%>% 
+  mutate_if(is.numeric,round)
+
+
+# ++++++++++++++++++++++++ Skills and competences  ++++++++++++++++++++++++++++++++++++++
+skillsPattern <- "Think about your level of knowledge, skills and competences NOW. Rate yourself based on the items below, (limited, average or Excellenet/well developed)."
+maleSkills <- responseData %>%   filter(`What is your gender` == "Male") %>% 
+  select(starts_with(skillsPattern)) 
+names(maleSkills) <- names(maleSkills)%>% gsub("Think about your level of knowledge, skills and competences NOW. Rate yourself based on the items below, \\(limited, average or Excellenet/well developed\\).","",.)
+
+maleSkills1 <- maleSkills%>%  t() %>% 
+  as.data.frame() %>% 
+  transmute('Excellent/Well developed' = apply(., 1, function(x) length(which(x == "Excellent/Well developed"))),
+            'Average(%)' = apply(., 1, function(x) length(which(x == "Average"))),
+            'Limited(%)' = apply(., 1, function(x) length(which(x == "Limited")))) %>% 
+  mutate("skills" = colnames(maleSkills)) %>% select(c(4,1:3))%>% replace(., is.na(.), 0)
+names_to_transform <- names(maleSkills1)[2:4]
+maleSkills1 <- maleSkills%>%  t() %>% 
+  as.data.frame() %>% 
+  transmute('Excellent/Well developed(%)' = apply(., 1, function(x) length(which(x == "Excellent/Well developed"))),
+            'Average(%)' = apply(., 1, function(x) length(which(x == "Average"))),
+            'Limited(%)' = apply(., 1, function(x) length(which(x == "Limited")))) %>% 
+  mutate("skills(%)" = colnames(maleSkills)) %>% select(c(4,1:3))%>% replace(., is.na(.), 0)
+names_to_transform <- names(maleSkills1)[2:4]
+maleSkills1<- maleSkills1 %>%
+  mutate(`Total counts` = rowSums(.[names_to_transform])) %>%
+  mutate_at(names_to_transform, funs((./`Total counts`)*100))%>% 
+  mutate_if(is.numeric,round)
+##    female
+femaleSkills <- responseData %>%   filter(`What is your gender` == "Female") %>% 
+  select(starts_with(skillsPattern)) 
+names(femaleSkills) <- names(femaleSkills)%>% gsub("Think about your level of knowledge, skills and competences NOW. Rate yourself based on the items below, \\(limited, average or Excellenet/well developed\\).","",.)
+
+femaleSkills1 <- femaleSkills%>%  t() %>% 
+  as.data.frame() %>% 
+  transmute('Excellent/Well developed(%)' = apply(., 1, function(x) length(which(x == "Excellent/Well developed"))),
+            'Average(%)' = apply(., 1, function(x) length(which(x == "Average"))),
+            'Limited(%)' = apply(., 1, function(x) length(which(x == "Limited")))) %>% 
+  mutate("skills" = colnames(femaleSkills)) %>% select(c(4,1:3))%>% replace(., is.na(.), 0)
+names_to_transform <- names(femaleSkills1)[2:4]
+femaleSkills1<- femaleSkills1 %>%
+  mutate(`Total counts` = rowSums(.[names_to_transform])) %>%
+  mutate_at(names_to_transform, funs((./`Total counts`)*100))%>% 
+  mutate_if(is.numeric,round)
+
+# ++++++++++++++++++++++++++ science and development +++++++++++++++
+sciDevPattern <- "To what extent;"
+maleVsScidev<- responseData %>%   filter(`What is your gender` == "Male") %>% 
+  select(starts_with(sciDevPattern)) 
+names(maleVsScidev) <- names(maleVsScidev)%>% gsub("To what extent;","",.)
+names(maleVsScidev) <- names(maleVsScidev)%>% str_replace_all("\\.","")
+
+maleVsScidev2 <- maleVsScidev %>% t() %>% 
+  as.data.frame() %>% 
+  transmute('To a great extent(%)' = apply(., 1, function(x) length(which(x == "To a great extent"))),
+            'To a moderate extent(%)' = apply(., 1, function(x) length(which(x == "To a moderate extent"))),
+            'Not at all(%)' = apply(., 1, function(x) length(which(x == "Not at all")))) %>% 
+  mutate("To what extent" = colnames(maleVsScidev)) %>% select(c(4,1:3))%>% replace(., is.na(.), 0)
+
+names_to_transform <- names(maleVsScidev2)[2:4]
+maleVsScidev3<- maleVsScidev2 %>%
+  mutate(`Total counts` = rowSums(.[names_to_transform])) %>%
+  mutate_at(names_to_transform, funs((./`Total counts`)*100))%>% 
+  mutate_if(is.numeric,round)
+# +++++++++++++++++++++++++++++++++++++ female ++++++++++++++++++
+femaleVsScidev<- responseData %>%   filter(`What is your gender` == "Female") %>% 
+  select(starts_with(sciDevPattern)) 
+names(femaleVsScidev) <- names(femaleVsScidev)%>% gsub("To what extent;","",.)
+names(femaleVsScidev) <- names(femaleVsScidev)%>% str_replace_all("\\.","")
+
+femaleVsScidev2 <- femaleVsScidev %>% t() %>% 
+  as.data.frame() %>% 
+  transmute('To a great extent(%)' = apply(., 1, function(x) length(which(x == "To a great extent"))),
+            'To a moderate extent(%)' = apply(., 1, function(x) length(which(x == "To a moderate extent"))),
+            'Not at all(%)' = apply(., 1, function(x) length(which(x == "Not at all")))) %>% 
+  mutate("To what extent did" = colnames(femaleVsScidev)) %>% select(c(4,1:3))%>% replace(., is.na(.), 0)
+
+names_to_transform <- names(femaleVsScidev2)[2:4]
+femaleVsScidev3<- femaleVsScidev2 %>%
+  mutate(`Total counts` = rowSums(.[names_to_transform])) %>%
+  mutate_at(names_to_transform, funs((./`Total counts`)*100))%>% 
+  mutate_if(is.numeric,round)
+```
+
+
+<!----------- significance test functions for multiple questions multiple answers --------------->
+```{r include=FALSE}
+# ++++++++++++++++++++++++++++++++ Gender based tests +++++++++++++++++++++++++++++++++++++++
+signficanceTestGender <- function(pattern){
+  # ++++++++++++++++++++++++++++ females
+  femaleExperience <- responseData %>% filter(`What is your gender` == "Female") %>% 
+    select(starts_with(pattern)) 
+  
+  if(startsWith(pattern, "Please rate the following items")){
+    names(femaleExperience) <- names(femaleExperience)%>% gsub(pattern,"",.)
+  }else if(startsWith(pattern, 
+                      "How valuable (important) would you say the items below were to you while studying at AIMS?")){
+    names(femaleExperience) <- names(femaleExperience)%>% gsub("How valuable \\(important\\) would you say the items below were to you while studying at AIMS\\?","",.)
+    names(femaleExperience) <- names(femaleExperience)%>% gsub("\\(","",.)
+    names(femaleExperience) <- names(femaleExperience)%>% gsub("\\)","",.)    
+  }else if(startsWith(pattern, "Think about your level of knowledge")){
+    names(femaleExperience) <- names(femaleExperience)%>% gsub("Think about your level of knowledge, skills and competences NOW. Rate yourself based on the items below, \\(limited, average or Excellenet/well developed\\).","",.)
+  }
+else if(startsWith(pattern, "To what extent;")){
+names(femaleExperience) <- names(femaleExperience)%>% gsub("To what extent;","",.)
+names(femaleExperience) <- names(femaleExperience)%>% str_replace_all("\\.","")
+  }
+
+    femaleExperience2 <- femaleExperience %>% filter(!is.na(.[,1])) %>% #to remove NA rows
+    t() %>% as.data.frame() %>% 
+    mutate("Options" = colnames(femaleExperience)) %>% select(dim(.)[2],1:(dim(.)[2] - 1)) %>% 
+    gather("V", "rating",2:(dim(.)[2]))
+  femaleExperience3 <- femaleExperience2  %>% mutate(Gender = rep("Female", dim(femaleExperience2)[1]))
+  
+  # +++++++++++++++++++++++++++++++  males
+  maleExperience <- responseData %>% filter(`What is your gender` == "Male") %>% 
+    select(starts_with(pattern)) 
+  if(startsWith(pattern, "Please rate the following items")){
+    names(maleExperience) <- names(maleExperience)%>% gsub(pattern,"",.)
+  }else if(startsWith(pattern, "How valuable")){
+    names(maleExperience) <- names(maleExperience)%>% gsub("How valuable \\(important\\) would you say the items below were to you while studying at AIMS\\?","",.)
+    names(maleExperience) <- names(maleExperience)%>% gsub("\\(","",.)
+    names(maleExperience) <- names(maleExperience)%>% gsub("\\)","",.)    
+  }else if(startsWith(pattern, "Think about your level of knowledge")){
+    names(maleExperience) <- names(maleExperience)%>% gsub("Think about your level of knowledge, skills and competences NOW. Rate yourself based on the items below, \\(limited, average or Excellenet/well developed\\).","",.)
+  }else if(startsWith(pattern, "To what extent;")){
+names(maleExperience) <- names(maleExperience)%>% gsub("To what extent;","",.)
+names(maleExperience) <- names(maleExperience)%>% str_replace_all("\\.","")
+  }
+  
+  maleExperience2 <- maleExperience %>% filter(!is.na(.[,1])) %>% #to remove NA rows
+    t() %>% as.data.frame() %>% 
+    mutate("Options" = colnames(maleExperience)) %>% select(dim(.)[2],1:(dim(.)[2] - 1)) %>% 
+    gather("V", "rating",2:(dim(.)[2]))
+  maleExperience3 <- maleExperience2  %>% mutate(Gender = rep("Male", dim(maleExperience2)[1]))
+  
+  df <- rbind(femaleExperience3[,-2], maleExperience3[,-2])
+  
+  df2 <- df %>% 
+    group_by(Options) %>% 
+    summarise(pvalue= chisq.test(rating, Gender,  simulate.p.value = TRUE)$p.value) 
+  return(df2)
+}
+
+
+# +++++++++++++++++++++++++++++++++ centre based tests +++++++++++++++++++++++++++++++++++++++++++
+signficanceTestCentre <- function(pattern){
+  # +++++++++++++++ Ghana
+  GhanaExperience <- responseData %>% filter(`Which AIMS center are you attending or did you attend?` == "AIMS Ghana") %>% 
+    select(starts_with(pattern)) 
+  
+  if(startsWith(pattern, "Please rate the following items")){
+    names(GhanaExperience) <- names(GhanaExperience)%>% gsub(pattern,"",.)
+  }else if(startsWith(pattern, "How valuable")){
+    names(GhanaExperience) <- names(GhanaExperience)%>% gsub("How valuable \\(important\\) would you say the items below were to you while studying at AIMS\\?","",.)
+    names(GhanaExperience) <- names(GhanaExperience)%>% gsub("\\(","",.)
+    names(GhanaExperience) <- names(GhanaExperience)%>% gsub("\\)","",.)    
+  }else if(startsWith(pattern, "Think about your level of knowledge")){
+    names(GhanaExperience) <- names(GhanaExperience)%>% gsub("Think about your level of knowledge, skills and competences NOW. Rate yourself based on the items below, \\(limited, average or Excellenet/well developed\\).","",.)
+  }else if(startsWith(pattern, "To what extent;")){
+names(GhanaExperience) <- names(GhanaExperience)%>% gsub("To what extent;","",.)
+names(GhanaExperience) <- names(GhanaExperience)%>% str_replace_all("\\.","")
+  }
+  
+  
+  GhanaExperience2 <- GhanaExperience %>% filter(!is.na(.[,1])) %>% #to remove NA rows
+    t() %>% as.data.frame() %>% 
+    mutate("Options" = colnames(GhanaExperience)) %>% select(dim(.)[2],1:(dim(.)[2] - 1)) %>% 
+    gather("V", "rating",2:(dim(.)[2]))
+  GhanaExperience3 <- GhanaExperience2  %>% mutate(Centre = rep("AIMS Ghana", dim(GhanaExperience2)[1]))
+  
+  # +++++++++++++++++++++++ Rwanda
+  RwandaExperience <- responseData %>% filter(`Which AIMS center are you attending or did you attend?` == "AIMS Rwanda") %>% 
+    select(starts_with(pattern)) 
+  if(startsWith(pattern, "Please rate the following items")){
+    names(RwandaExperience) <- names(RwandaExperience)%>% gsub(pattern,"",.)
+  }else if(startsWith(pattern, "How valuable")){
+    names(RwandaExperience) <- names(RwandaExperience)%>% gsub("How valuable \\(important\\) would you say the items below were to you while studying at AIMS\\?","",.)
+    names(RwandaExperience) <- names(RwandaExperience)%>% gsub("\\(","",.)
+    names(RwandaExperience) <- names(RwandaExperience)%>% gsub("\\)","",.)    
+  }else if(startsWith(pattern, "Think about your level of knowledge")){
+    names(RwandaExperience) <- names(RwandaExperience)%>% gsub("Think about your level of knowledge, skills and competences NOW. Rate yourself based on the items below, \\(limited, average or Excellenet/well developed\\).","",.)
+  }else if(startsWith(pattern, "To what extent;")){
+names(RwandaExperience) <- names(RwandaExperience)%>% gsub("To what extent;","",.)
+names(RwandaExperience) <- names(RwandaExperience)%>% str_replace_all("\\.","")
+  }
+  
+    RwandaExperience2 <- RwandaExperience %>% filter(!is.na(.[,1])) %>% #to remove NA rows
+    t() %>% as.data.frame() %>% 
+    mutate("Options" = colnames(RwandaExperience)) %>% select(dim(.)[2],1:(dim(.)[2] - 1)) %>% 
+    gather("V", "rating",2:(dim(.)[2]))
+  RwandaExperience3 <- RwandaExperience2  %>% mutate(Centre = rep("AIMS Rwanda", dim(RwandaExperience2)[1]))
+  
+  # +++++++++++++++++++++++  Cameroon
+  CameroonExperience <- responseData %>% filter(`Which AIMS center are you attending or did you attend?` == "AIMS Cameroon") %>% 
+    select(starts_with(pattern)) 
+  if(startsWith(pattern, "Please rate the following items")){
+    names(CameroonExperience) <- names(CameroonExperience)%>% gsub(pattern,"",.)
+  }else if(startsWith(pattern, "How valuable")){
+    names(CameroonExperience) <- names(CameroonExperience)%>% gsub("How valuable \\(important\\) would you say the items below were to you while studying at AIMS\\?","",.)
+    names(CameroonExperience) <- names(CameroonExperience)%>% gsub("\\(","",.)
+    names(CameroonExperience) <- names(CameroonExperience)%>% gsub("\\)","",.)    
+  }else if(startsWith(pattern, "Think about your level of knowledge")){
+    names(CameroonExperience) <- names(CameroonExperience)%>% gsub("Think about your level of knowledge, skills and competences NOW. Rate yourself based on the items below, \\(limited, average or Excellenet/well developed\\).","",.)
+  }else if(startsWith(pattern, "To what extent;")){
+names(CameroonExperience) <- names(CameroonExperience)%>% gsub("To what extent;","",.)
+names(CameroonExperience) <- names(CameroonExperience)%>% str_replace_all("\\.","")
+  }
+  
+  CameroonExperience2 <- CameroonExperience %>% filter(!is.na(.[,1])) %>% #to remove NA rows
+    t() %>% as.data.frame() %>% 
+    mutate("Options" = colnames(CameroonExperience)) %>% select(dim(.)[2],1:(dim(.)[2] - 1)) %>% 
+    gather("V", "rating",2:(dim(.)[2]))
+  CameroonExperience3 <- CameroonExperience2  %>% mutate(Centre = rep("AIMS Cameroon", dim(CameroonExperience2)[1]))
+
+  # +++++++++++++++++++++++ Senegal
+  SenegalExperience <- responseData %>% filter(`Which AIMS center are you attending or did you attend?` == "AIMS Senegal") %>% 
+    select(starts_with(pattern)) 
+  if(startsWith(pattern, "Please rate the following items")){
+    names(SenegalExperience) <- names(SenegalExperience)%>% gsub(pattern,"",.)
+  }else if(startsWith(pattern, "How valuable")){
+    names(SenegalExperience) <- names(SenegalExperience)%>% gsub("How valuable \\(important\\) would you say the items below were to you while studying at AIMS\\?","",.)
+    names(SenegalExperience) <- names(SenegalExperience)%>% gsub("\\(","",.)
+    names(SenegalExperience) <- names(SenegalExperience)%>% gsub("\\)","",.)    
+  }else if(startsWith(pattern, "Think about your level of knowledge")){
+    names(SenegalExperience) <- names(SenegalExperience)%>% gsub("Think about your level of knowledge, skills and competences NOW. Rate yourself based on the items below, \\(limited, average or Excellenet/well developed\\).","",.)
+  }else if(startsWith(pattern, "To what extent;")){
+names(SenegalExperience) <- names(SenegalExperience)%>% gsub("To what extent;","",.)
+names(SenegalExperience) <- names(SenegalExperience)%>% str_replace_all("\\.","")
+  }
+  
+  SenegalExperience2 <- SenegalExperience %>% filter(!is.na(.[,1])) %>% #to remove NA rows
+    t() %>% as.data.frame() %>% 
+    mutate("Options" = colnames(SenegalExperience)) %>% select(dim(.)[2],1:(dim(.)[2] - 1)) %>% 
+    gather("V", "rating",2:(dim(.)[2]))
+  SenegalExperience3 <- SenegalExperience2  %>% mutate(Centre = rep("AIMS Senegal", dim(SenegalExperience2)[1]))
+
+  # +++++++++++++++++++++++  SA
+  SAExperience <- responseData %>% filter(`Which AIMS center are you attending or did you attend?` == "AIMS South Africa") %>% 
+    select(starts_with(pattern)) 
+  if(startsWith(pattern, "Please rate the following items")){
+    names(SAExperience) <- names(SAExperience)%>% gsub(pattern,"",.)
+  }else if(startsWith(pattern, "How valuable")){
+    names(SAExperience) <- names(SAExperience)%>% gsub("How valuable \\(important\\) would you say the items below were to you while studying at AIMS\\?","",.)
+    names(SAExperience) <- names(SAExperience)%>% gsub("\\(","",.)
+    names(SAExperience) <- names(SAExperience)%>% gsub("\\)","",.)    
+  }else if(startsWith(pattern, "Think about your level of knowledge")){
+    names(SAExperience) <- names(SAExperience)%>% gsub("Think about your level of knowledge, skills and competences NOW. Rate yourself based on the items below, \\(limited, average or Excellenet/well developed\\).","",.)
+  }else if(startsWith(pattern, "To what extent;")){
+names(SAExperience) <- names(SAExperience)%>% gsub("To what extent;","",.)
+names(SAExperience) <- names(SAExperience)%>% str_replace_all("\\.","")
+  }
+  
+  SAExperience2 <- SAExperience %>% filter(!is.na(.[,1])) %>% #to remove NA rows
+    t() %>% as.data.frame() %>% 
+    mutate("Options" = colnames(SAExperience)) %>% select(dim(.)[2],1:(dim(.)[2] - 1)) %>% 
+    gather("V", "rating",2:(dim(.)[2]))
+  SAExperience3 <- SAExperience2  %>% mutate(Centre = rep("AIMS South Africa", dim(SAExperience2)[1]))
+  # combine all
+  df <- rbind(GhanaExperience3[,-2], RwandaExperience3[,-2], CameroonExperience3[,-2],
+              SenegalExperience3[,-2], SAExperience3[,-2])
+  
+  df2 <- df %>% 
+    group_by(Options) %>% 
+    summarise(pvalue= chisq.test(rating, Centre,  simulate.p.value = TRUE)$p.value) 
+  return(df2)
+}
+
+```
+
+
+## Study focus during AIMS
+### Academic focus of students during AIMS
+Question: What is your academic focus now
+
+```{r}
+pieChartPlotter(studyFocus2,"Academic Fcous") 
+```
+
+#### Table of the  Study focus seperated by gender
+
+```{r echo=FALSE}
+ft <- autofit(flextable(studyFocusVsgender)) 
+fit_to_width(ft, max_width = 8)
+
+```
+
+#### Chisquare test p-value of independence between study focus and Gender
+```{r}
+testFunc(studyFocusVsgender)
+```
+
+#### Table of the  Study focus seperated by centre
+
+```{r echo=FALSE}
+ft <- autofit(flextable(studyFocusVsCentre)) 
+fit_to_width(ft, max_width = 8)
+
+```
+
+#### Chisquare test p-value of independence between study focus and Centre
+
+```{r}
+testFunc(studyFocusVsCentre)
+
+```
+
+Question: What career would you like to pursue after completing at AIMS:
+
+```{r}
+qn <- responseData$`What career would you like to pursue after completing at AIMS:`
+Careers <- sapply(qn, function(s) gsub('(.{1,250})(\\s|$)', '\\1\n', s))
+ft <- autofit(align_text_col(flextable(data.frame(Careers)), align = "left", header = TRUE)) 
+fit_to_width(ft, max_width = 8)
+```
+
+
+### Change in academic focus during AIMS
+Question: If your academic focus changed while studying at AIMS, to what extent do you feel AIMS influenced this?
+
+```{r}
+focusChangePlot
+```
+
+#### Table of the Change in academic focus seperated by gender
+
+```{r echo=FALSE}
+ft <- autofit(flextable(genderVsfocusChange)) 
+fit_to_width(ft, max_width = 8)
+
+```
+
+#### Chisquare test p-value of independence between change in academic focus and Gender
+
+```{r}
+testFunc(genderVsfocusChange)
+
+```
+
+#### Table of the Change in academic focus seperated by centre
+
+```{r echo=FALSE}
+ft <- autofit(flextable(centreVsfocusChange))
+fit_to_width(ft, max_width = 8)
+```
+
+#### Chisquare test p-value of independence between change in academic focus and Centre
+
+```{r}
+testFunc(centreVsfocusChange)
+
+```
+
+## Sectors of research at AIMS
+Question: Which broad sector did your research at AIMS focus on?
+
+```{r, fig.height=5, fig.width=7, message=FALSE, warning=FALSE}
+pieChartPlotter(researchSectors2,"Sectors")
+```
+
+#### Table of the sectors of research seperated by gender
+
+```{r echo=FALSE}
+ft <- autofit(flextable(genderVsResearch)) 
+fit_to_width(ft, max_width = 8)
+
+```
+
+#### Chisquare test p-value of independence between sectors of research and Gender
+
+```{r}
+testFunc(genderVsResearch)
+
+```
+
+#### Table of the sectors of research seperated by centre
+
+```{r echo=FALSE}
+ft <- autofit(flextable(centreVsResearch)) 
+fit_to_width(ft, max_width = 8)
+
+```
+
+#### Chisquare test p-value of independence between sectors of research and Centre
+
+```{r}
+testFunc(centreVsResearch)
+
+```
+
+## Quality of AIMS
+### Importance of education aspects of AIMS
+Question: How valuable (important) would you say the items below were to you while studying at AIMS?
+
+```{r, fig.height=8, fig.width=8, message=FALSE, warning=FALSE}
+stackedChartPlotter(qualityAIMS3)
+```
+
+#### Table of importance of education aspects of AIMS for females
+
+```{r echo=FALSE}
+ft <- autofit(flextable(femaleVsquality3)) 
+fit_to_width(ft, max_width = 8.7)
+
+```
+
+#### Table of importance of education aspects of AIMS for males
+
+```{r echo=FALSE}
+ft <- autofit(flextable(maleVsquality3)) 
+fit_to_width(ft, max_width = 8.7)
+
+```
+
+#### Chisquare test p-values for the significance of the relationship between the different education aspects and Gender
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ft <- autofit(flextable(signficanceTestGender(qualityPattern))) 
+fit_to_width(ft, max_width = 8)
+
+```
+
+#### Chisquare test p-values for the significance of the relationship between the different education aspects and Centre
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ft <- autofit(flextable(signficanceTestCentre(qualityPattern))) 
+fit_to_width(ft, max_width = 8)
+
+```
+
+### Rating of aspects of experiences during AIMS 
+Question: Please rate the following items from your experience at AIMS now that you have completed your studies at AIMS
+
+```{r, fig.height=5, fig.width=8, message=FALSE, warning=FALSE}
+stackedChartPlotter(experienceAIMS3)
+```
+
+#### Rating of Female Experiences
+
+```{r}
+ft <- autofit(flextable(femaleExperience3)) 
+fit_to_width(ft, max_width = 8)
+
+```
+
+#### Rating of Male Experiences
+
+```{r}
+ft <- autofit(flextable(maleExperience3)) 
+fit_to_width(ft, max_width = 8)
+
+```
+
+#### Chisquare test p-values for the significance of the relationship between various experiences with Gender
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ft <- autofit(flextable(signficanceTestGender(experiencePattern))) 
+fit_to_width(ft, max_width = 8)
+
+```
+
+#### Chisquare test p-values for the significance of the relationship between various experiences and Centre
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ft <- autofit(flextable(signficanceTestCentre(experiencePattern))) 
+fit_to_width(ft, max_width = 8)
+
+```
+
+## Role fulfilment
+### AIMS’ fulfilment of its role 
+Question: Given your current understanding of the role of AIMS, to what extent do you think AIMS has fulfilled its mandate?
+
+```{r, fig.height=5, fig.width=7, message=FALSE, warning=FALSE}
+pieChartPlotter(fulfiled2,"Fulfilment")
+```
+
+#### AIMS’ fulfilment of its role, split by center 
+
+```{r, fig.height=4, fig.width=6, message=FALSE, warning=FALSE}
+stackedChartPlotter(roleOfAIMS1)
+```
+
+
+#### Table of the extent to which AIMS fulfiled its role  seperated by gender
+
+```{r echo=FALSE}
+ft <- autofit(flextable(genderVsFulfiled)) 
+fit_to_width(ft, max_width = 8)
+
+```
+
+#### Chisquare test p-value of independence between the extent to which AIMS fulfiled its role and Gender
+
+```{r}
+testFunc(genderVsFulfiled)
+
+```
+
+#### Table of the extent to which AIMS fulfiled its role seperated by centre
+
+```{r echo=FALSE}
+ft <- autofit(flextable(centreVsFulfiled)) 
+fit_to_width(ft, max_width = 8)
+
+```
+
+#### Chisquare test p-value of independence between the extent to which AIMS fulfiled its role and Centre
+
+```{r}
+testFunc(centreVsFulfiled)
+
+```
+
+## Academic expectations
+### Extent to which academic expectations are met
+Question: To what extent did AIMS meet your expectations?
+
+```{r}
+pieChartPlotter(expectations2,"Extent")
+```
+
+#### Table of the extent to which academic expectations were met seperated by gender
+
+```{r echo=FALSE}
+ft <- autofit(flextable(genderVsexpectations)) 
+fit_to_width(ft, max_width = 8)
+
+```
+
+#### Chisquare test p-value of independence between the extent to which academic expectations were met and Gender
+
+```{r}
+testFunc(genderVsexpectations)
+
+```
+
+#### Extent to which academic expectations are met, split by center
+
+```{r,  fig.height=4, fig.width=7, message=FALSE, warning=FALSE}
+stackedChartPlotter(academicAIMS1)
+```
+
+#### Table of the extent to which academic expectations were met seperated by centre
+
+```{r echo=FALSE}
+ft <- autofit(flextable(centreVsexpectations))
+fit_to_width(ft, max_width = 8)
+
+```
+
+#### Chisquare test p-value of independence between the extent to which academic expectations were met and Centre
+
+```{r}
+testFunc(centreVsexpectations)
+
+```
+
+## Learning outcomes
+
+### Most important lessons at AIMS
+
+Question: What is the most important thing you have achieved or gained from AIMS?
+
+```{r}
+qn <- responseData$`What is the most important thing you have achieved or gained from AIMS?`
+Lessons <- qn#sapply(qn, function(s) gsub('(.{1,250})(\\s|$)', '\\1\n', s))
+ft <- autofit(align_text_col(flextable(data.frame(Lessons)), align = "left", header = TRUE)) 
+fit_to_width(ft, max_width = 8)
+```
+
+### Post-AIMS levels of knowledge, skills and competences
+Question: Think about your level of knowledge, skills and competences NOW. Rate yourself based on the items below, (limited, average or Excellenet/well developed).
+
+```{r,  fig.height=8, fig.width=8, message=FALSE, warning=FALSE}
+stackedChartPlotter(skills2)
+```
+
+#### Table of skills and competences in females
+
+```{r echo=FALSE}
+ft <- autofit(flextable(femaleSkills1)) 
+fit_to_width(ft, max_width = 8)
+
+```
+
+
+#### Table of skills and competences in in males
+
+```{r echo=FALSE}
+ft <- autofit(flextable(maleSkills1)) 
+fit_to_width(ft, max_width = 8)
+
+```
+
+#### Career-related knowledge, skills and competences 
+
+```{r, fig.height=3, fig.width=7, message=FALSE, warning=FALSE}
+stackedChartPlotter(jobSkills2)
+```
+
+#### Chisquare test p-values for the significance of the relationship between skills and competences gained with Gender
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ft <- autofit(flextable(signficanceTestGender(skillsPattern))) 
+fit_to_width(ft, max_width = 8)
+
+```
+
+#### Chisquare test p-values for the significance of the relationship between skills and competences gained with Centre
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ft <- autofit(flextable(signficanceTestCentre(skillsPattern))) 
+fit_to_width(ft, max_width = 8)
+
+```
+
+## Career Plans of AIMS Graduates
+### Geographic plans immediately after completing
+Question: Where do you plan to go immediately after AIMS?(Either to work, study or stay?)
+
+
+```{r, fig.height=5, fig.width=7, message=FALSE, warning=FALSE}
+pieChartPlotter(postAIMSplans2,"Post-AIMS Destination")
+```
+
+#### Table of post-AIMS plans seperated by gender
+
+```{r echo=FALSE}
+ft <- autofit(flextable(genderVsPostAIMSplans)) 
+fit_to_width(ft, max_width = 8)
+
+```
+
+#### Chisquare test p-value of independence between post-AIMS plans and Gender
+
+```{r}
+testFunc(genderVsPostAIMSplans)
+
+```
+
+#### Table of post-AIMS plans seperated by centre
+
+```{r echo=FALSE}
+ft <- autofit(flextable(centreVsPostAIMSplans)) 
+fit_to_width(ft, max_width = 8.5)
+
+```
+
+#### Chisquare test p-value of independence between post-AIMS plans and Centre
+
+```{r}
+testFunc(centreVsPostAIMSplans)
+
+```
+
+## Contribution to Development Challenges: Main priority?
+Question: To what extent is it a main priority for you to contribute to Africa's development?
+
+```{r, fig.height=5, fig.width=7, message=FALSE, warning=FALSE}
+pieChartPlotter(priority2,"Extent")
+```
+
+#### Table of to develop Africa as main priority seperated by gender
+
+```{r echo=FALSE}
+ft <- autofit(flextable(genderVsPriority)) 
+fit_to_width(ft, max_width = 8)
+
+```
+
+#### Chisquare test p-value of independence between developing Africa as a main priority and Gender
+
+```{r}
+testFunc(genderVsPriority)
+
+```
+
+#### Table of to develop Africa as main priority seperated by centre
+```{r echo=FALSE}
+ft <- autofit(flextable(centreVsPriority)) 
+fit_to_width(ft, max_width = 8)
+
+```
+
+#### Chisquare test p-value of independence between developing Africa as a main priority and Centre
+
+```{r}
+testFunc(centreVsPriority)
+
+```
+
+
+## Relation between science and development 
+Question: To what extent:
+
+```{r, fig.height=6, fig.width=8, message=FALSE, warning=FALSE}
+stackedChartPlotter(sciDevReln2)
+```
+
+#### Table of Female opinions about science and development
+
+```{r}
+ft <- autofit(flextable(femaleVsScidev3)) 
+fit_to_width(ft, max_width = 8.5)
+
+```
+
+#### Table of Male opinions about science and development
+
+```{r}
+ft <- autofit(flextable(maleVsScidev3)) 
+fit_to_width(ft, max_width = 8.5)
+
+```
+
+#### Chisquare test p-values for the significance of various  aspects of science and development Vs Gender
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ft <- autofit(flextable(signficanceTestGender(sciDevPattern))) 
+fit_to_width(ft, max_width = 8.)
+
+```
+
+#### Chisquare test p-values for the significance of various  aspects of science and development Vs Centre
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ft <- autofit(flextable(signficanceTestCentre(sciDevPattern))) 
+fit_to_width(ft, max_width = 8)
+
+```
+
+### Extent to which AIMS facilitated the next step
+Question: To what extent do you feel AIMS facilitated the next step in your career?
+
+```{r, fig.height=4, fig.width=6, message=FALSE, warning=FALSE}
+pieChartPlotter(extent2,"Extent of AIMS support")
+```
+
+#### Table of Extent to which AIMS facilitated the next step by gender
+
+```{r echo=FALSE}
+ft <- autofit(flextable(genderVsNextstep)) 
+fit_to_width(ft, max_width = 8)
+
+```
+
+#### Chisquare test p-values of independence between the extent to which AIMS facilitated the next step and Gender
+
+```{r}
+testFunc(genderVsNextstep)
+```
+
+#### Table of Extent to which AIMS facilitated the next step seperated by Centre
+
+```{r echo=FALSE}
+ft <- autofit(flextable(centreVsNextstep)) 
+fit_to_width(ft, max_width = 8)
+
+```
+
+#### Chisquare test p-values of independence between the extent to which AIMS facilitated the next step and Centre
+```{r}
+testFunc(centreVsNextstep)
+
+```
+#### ways to improve content taught at AIMS
+What else could have been included in the AIMS program that would be beneficial to you in your future career/ studies?
+
+#### Results below are generated automatically and are best viewed by increasing the font
+```{r}
+qn <- responseData$`What else could have been included in the AIMS program that would be beneficial to you in your future career/ studies?`
+Improvements <- sapply(qn, function(s) gsub('(.{1,250})(\\s|$)', '\\1\n', s))
+Center <- responseData$"Which AIMS center are you attending or did you attend?"
+ft <- autofit(align_text_col(flextable(data.frame(Center, Improvements)), align = "left", header = TRUE)) 
+fit_to_width(ft, max_width = 8)
+```
+### Ways in which students can contribute to AIMS
+Question: In which areas do you feel you can contribute to AIMS?(Areas where AIMS can engage you.
+
+```{r echo=FALSE}
+pieChartPlotter(contribution2,"Contribution to AIMS")
+```
+
+#### Table of Contribution seperated by gender
+```{r echo=FALSE}
+ft <- autofit(flextable(genderVsContribution)) 
+fit_to_width(ft, max_width = 8)
+
+```
+
+#### Chisquare test p-values of independence between contributing to AIMS and Gender
+```{r}
+testFunc(genderVsContribution)
+
+```
+
+#### Table of Contribution seperated by center
+```{r echo=FALSE}
+ft <- autofit(flextable(centreVsContribution)) 
+fit_to_width(ft, max_width = 8)
+
+```
+
+#### Chisquare test p-values of independence between contributing to AIMS and Centre
+
+```{r}
+testFunc(centreVsContribution)
+
+```
